@@ -36,8 +36,6 @@ Each folder in this repository corresponds to one project and contains:
 
 ## Project List
 
-> (Once we move the existing projects, this section will link to each folder.)
-
 - `anomaly-detection/` – Anomaly detection in industrial sensor data  
 - `soft-sensor/` – Soft sensor for predicting a chemical concentration  
 - `predictive-maintenance/` – Failure risk prediction for equipment  
