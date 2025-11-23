@@ -1,0 +1,105 @@
+declare @tabla TABLE (Pila varchar(50), Fecha datetime, yodo_fino numeric(20,2), no3_fino numeric(20,2), riego numeric(20,2), tipo_riego varchar(50), conc_riego numeric(20,2), dren_ajus numeric(20,2), dren_real numeric(20,2), etapa varchar(50), dren_i2 numeric(20,2), dren_no3 numeric(20,2), rl numeric(20,6), kg_extraidos numeric(20,2), kg_extraidos_no3 numeric(20,2) , extraccion_dia_no3 numeric(20,2), extraccion_dia numeric(20,2))
+insert into @tabla
+	SELECT b.pila, b.fecha, c.yodo_cargado as yodo_fino, c.no3_cargado as no3_fino,
+	case
+		when sum(isnull(R_imp,0)+isnull(r_agua,0)+isnull(r_Si,0)+isnull(r_mezcla,0)) >0 then avg(isnull(R_imp,0)+isnull(r_agua,0)+isnull(r_Si,0)+isnull(r_mezcla,0))
+		else 0
+		end as riego,
+	case 
+		when sum(isnull(R_IMP,0))>0 then 'Impregnación'
+		when sum(isnull(R_AGUA,0))>0 then 'Agua'
+		when sum(isnull(R_SI,0))>0 then 'SI'
+		when sum(isnull(R_MEZCLA,0))>0 then 'Mezcla'
+		else 'Sin riego'
+		end as tipo_riego,
+	case
+		when sum(isnull(R_SI,0)+isnull(R_MEZCLA,0))>0 then avg(isnull(I2_Riego_SI,0)+isnull(I2_Riego_MEZCLA,0))/sum(isnull(R_SI,0)+isnull(R_MEZCLA,0))		
+		else 0
+		end as riego_i2,
+	case
+		when sum(isnull(DREN_SR_AJUS,0)+isnull(DREN_SI_AJUS,0))>0 then avg(isnull(DREN_SR_AJUS,0)+isnull(DREN_SI_AJUS,0))
+		else 0
+		end as drenaje_ajus,
+	case
+		when sum(isnull(d_si,0))+sum(isnull(d_sr_imp,0)) > 0 then avg(isnull(d_si,0))+avg(isnull(d_sr_imp,0)) 
+		else 0
+		end as drenaje_real,
+		case
+		when sum(isnull(I2_SR_DREN,0))>0 then 'Cabeza'
+		when sum(isnull(R_IMP,0))>0 then 'Cabeza'
+		else 'Cola'
+		end as etapa,
+	case
+		when sum(isnull(I2_SR_DREN,0)+isnull(DC_I2_SI,0))>0 then avg(isnull(I2_SR_DREN,0)+isnull(DC_I2_SI,0))
+		else 0
+		end as dren_i2,
+	case
+		when sum(isnull(NO3_SR,0)+isnull(NO3_SI_dren,0))>0 then avg(isnull(NO3_SR,0)+isnull(NO3_SI_dren,0))
+		else 0
+		end as dren_no3,
+	case
+		when sum(isnull(R_imp,0)+isnull(r_agua,0)+isnull(r_Si,0)+isnull(r_mezcla,0)) >0 then avg(isnull(R_imp,0)+isnull(r_agua,0)+isnull(r_Si,0)+isnull(r_mezcla,0))/avg(c.Toneladas)
+		else 0
+		end as rl_dia,
+	case
+		when sum(isnull(KG_DREN_SR_AJUS,0)+isnull(KG_DREN_SI_AJUS,0))>0 then avg(isnull(KG_DREN_SR_AJUS,0)+isnull(KG_DREN_SI_AJUS,0))-avg(isnull(I2_Riego_SI,0)+isnull(I2_Riego_MEZCLA,0))
+		else 0
+		end as kg_extraidos,
+	case
+		when sum(isnull(NO3_dren_SR,0)+isnull(NO3_Dren_SI,0))>0 then avg(isnull(NO3_dren_SR,0)+isnull(NO3_Dren_SI,0))-avg(isnull(NO3_RiegoSI,0)+isnull(NO3_Mezcla_2,0))
+		else 0
+		end as kg_extraidos_no3,
+	case
+		when sum(isnull(NO3_dren_SR,0)+isnull(NO3_Dren_SI,0))>0 then 100*(avg(isnull(NO3_dren_SR,0)+isnull(NO3_Dren_SI,0))-avg(isnull(NO3_RiegoSI,0)+isnull(NO3_Mezcla_2,0)))/(avg(c.no3_cargado))
+		else 0
+		end as extraccion_no3,
+	case
+		when sum(isnull(KG_DREN_SR_AJUS,0)+isnull(KG_DREN_SI_AJUS,0))>0 then 100*(avg(isnull(KG_DREN_SR_AJUS,0)+isnull(KG_DREN_SI_AJUS,0))-avg(isnull(I2_Riego_SI,0)+isnull(I2_Riego_MEZCLA,0)))/(avg(c.yodo_cargado))
+		else 0
+		end as extraccion
+	FROM [SIPRO].[SPL_VA_PILAS_NV] b join
+	(select t1.pila from 
+		(select PILA, FECHA
+	from [SIPRO].[SPL_VA_PILAS_NV]
+	where fecha >= '2020-06-01'
+	group by pila, fecha
+	having sum(R_IMP) > 0 or sum(R_AGUA)>0 or sum(R_SI)>0 or sum(R_MEZCLA)>0) t1) a on b.pila=a.pila
+	left join 
+	(SELECT [ORIGEN] as Pila
+      ,[CALICHE] as Toneladas
+      ,[YODO] as I2ppm
+      ,[NITRATO] as NaNO3
+      ,[DENSIDAD] as densidad
+      ,[ALTURA] as Altura,
+	case	
+		when Caliche > 0 then caliche*yodo/1000
+		else 0
+		end as yodo_cargado,
+	case	
+		when Caliche > 0 then caliche*NITRATO/100
+		else 0
+		end as no3_cargado,
+	case
+		when (caliche > 0 and densidad > 0 and altura > 0) then caliche/(densidad*Altura)
+		else 0 
+		end as area_media
+    FROM [SIPRO].[PILAS_NV] t3) c on b.pila=c.pila
+	group by b.pila, fecha, c.yodo_cargado, c.no3_cargado
+	order by b.pila, fecha
+
+		select l1.pila, l1.fecha, 
+		case 
+			when l1.Pila like '%T%' then 'Talud'
+			else 'Pila'
+			end as Tipo,
+			AVG(l1.yodo_fino) as yodo_fino ,AVG(l1.no3_fino) as no3_fino, avg(l1.riego) as riego, l1.tipo_riego as tipo_riego, 
+			avg(l1.conc_riego) as riego_i2 , avg(l1.dren_ajus) as dren_ajus, avg(l1.dren_real) as dren_real, l1.etapa as etapa , avg(l1.dren_i2) as dren_i2 , 
+			avg(l1.dren_no3) as dren_no3, avg(l1.rl) as rl, avg(l1.kg_extraidos_no3) as kg_dia_no3 , avg(l1.kg_extraidos_no3)/AVG(l1.no3_fino) as extraccion_dia_no3 , avg(l1.kg_extraidos) as kg_dia , avg(l1.kg_extraidos)/AVG(l1.yodo_fino) as extraccion_dia,
+			sum(sum(l1.kg_extraidos_no3)) over (partition by Pila order by Pila,Fecha asc) as no3_kg_acum,
+			sum(sum(l1.kg_extraidos)) over (partition by Pila order by Pila,Fecha asc) as kg_acum,
+			sum(sum(l1.extraccion_dia_no3)) over (partition by Pila order by Pila,Fecha asc) as NaNO3_ext_acum,
+			sum(sum(l1.extraccion_dia)) over (partition by Pila order by Pila,Fecha asc) as ext_acum
+		from @tabla l1
+		group by l1.pila, l1.fecha, l1.tipo_riego, l1.etapa
+
+
